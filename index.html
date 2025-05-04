@@ -1,112 +1,155 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Multi-Room Firebase Comment Section</title>
+  <title>Comment Section</title>
   <style>
-    body { font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 1em; }
-    #comment-section { margin-top: 2em; }
-    .comment { border: 1px solid #ccc; padding: 0.5em; margin-bottom: 0.5em; position: relative; }
-    .delete-btn { position: absolute; top: 5px; right: 10px; cursor: pointer; color: red; }
+    body { font-family: sans-serif; background: #f4f4f4; }
+    .frame { padding: 20px; max-width: 600px; margin: 20px auto; background: #fff; border-radius: 10px; box-shadow: 0 0 10px #ccc; }
+    .typing-frame, .name-input { padding: 10px; border: 1px solid #ccc; border-radius: 5px; min-height: 40px; margin-bottom: 10px; }
+    .post-button-frame { background: #007BFF; color: white; padding: 10px; border-radius: 5px; text-align: center; cursor: pointer; }
+    .comments-frame { margin-top: 20px; max-height: 300px; overflow-y: auto; border: 1px solid #ccc; border-radius: 5px; padding: 10px; background: #f9f9f9; }
+    .comment { background: #fff; padding: 10px; margin-bottom: 10px; border-radius: 5px; position: relative; }
+    .comment-name { font-size: 12px; color: #555; }
+    .comment-text { font-size: 16px; }
+    .delete-btn { position: absolute; top: 10px; right: 10px; background: red; color: white; border: none; border-radius: 50%; width: 20px; height: 20px; text-align: center; cursor: pointer; line-height: 20px; font-size: 14px; display: none; }
   </style>
-  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
 </head>
 <body>
-  <h2>Comment Section</h2>
-  <div id="user-info"></div>
-  <button id="sign-in">Sign in with Google</button>
-  <button id="sign-out" style="display:none">Sign Out</button>
 
-  <div id="comment-section" style="display:none">
-    <textarea id="comment-input" placeholder="Enter your comment"></textarea><br>
-    <button onclick="postComment()">Post Comment</button>
-    <div id="comments"></div>
-  </div>
+<div class="frame" id="loginFrame">
+  <div class="name-input" contenteditable="true" id="nameInput">Enter your name...</div>
+  <div class="post-button-frame" onclick="registerUser()">Submit</div>
+</div>
 
-  <script>
-    // Firebase Config
-    const firebaseConfig = {
-      apiKey: "YOUR_API_KEY",
-      authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-      databaseURL: "https://YOUR_PROJECT_ID.firebaseio.com",
-      projectId: "YOUR_PROJECT_ID",
-      storageBucket: "YOUR_PROJECT_ID.appspot.com",
-      messagingSenderId: "YOUR_SENDER_ID",
-      appId: "YOUR_APP_ID"
-    };
-    firebase.initializeApp(firebaseConfig);
-    const database = firebase.database();
+<div class="frame" id="commentSection" style="display: none;">
+  <div class="typing-frame" id="typingFrame" contenteditable="true">Type here...</div>
+  <div class="post-button-frame" onclick="postIdea()">Post</div>
+  <div class="comments-frame" id="commentsFrame"></div>
+</div>
 
-    let room = new URLSearchParams(window.location.search).get("room") || "default";
-    let user = null;
+<!-- Firebase SDKs -->
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
 
-    const signInBtn = document.getElementById("sign-in");
-    const signOutBtn = document.getElementById("sign-out");
-    const userInfo = document.getElementById("user-info");
-    const commentSection = document.getElementById("comment-section");
+<script>
+  const urlParams = new URLSearchParams(window.location.search);
+  const roomName = urlParams.get('room') || 'default-room';
 
-    signInBtn.onclick = () => {
-      const provider = new firebase.auth.GoogleAuthProvider();
-      firebase.auth().signInWithPopup(provider).catch(console.error);
-    };
+  const firebaseConfig = {
+    apiKey: "AIzaSyArWjzJHsEmIOIMozj0dRFxeAR2CltT_Mc",
+    authDomain: "com-sec-14411.firebaseapp.com",
+    databaseURL: "https://com-sec-14411-default-rtdb.firebaseio.com",
+    projectId: "com-sec-14411",
+    storageBucket: "com-sec-14411.appspot.com",
+    messagingSenderId: "33144145489",
+    appId: "1:33144145489:web:ee5575ece13d7872955a70"
+  };
+  firebase.initializeApp(firebaseConfig);
+  const database = firebase.database();
 
-    signOutBtn.onclick = () => firebase.auth().signOut();
+  const nameInput = document.getElementById('nameInput');
+  const typingFrame = document.getElementById('typingFrame');
+  const loginFrame = document.getElementById('loginFrame');
+  const commentSection = document.getElementById('commentSection');
+  const commentsFrame = document.getElementById('commentsFrame');
+  const namePlaceholder = "Enter your name...";
+  const typingPlaceholder = "Type here...";
 
-    firebase.auth().onAuthStateChanged(u => {
-      user = u;
-      if (user) {
-        userInfo.textContent = `Signed in as ${user.displayName}`;
-        signInBtn.style.display = 'none';
-        signOutBtn.style.display = 'inline';
-        commentSection.style.display = 'block';
-        loadComments();
-      } else {
-        userInfo.textContent = '';
-        signInBtn.style.display = 'inline';
-        signOutBtn.style.display = 'none';
-        commentSection.style.display = 'none';
+  nameInput.addEventListener('focus', () => {
+    if (nameInput.textContent.trim() === namePlaceholder) {
+      nameInput.textContent = "";
+      nameInput.style.color = "black";
+    }
+  });
+
+  nameInput.addEventListener('blur', () => {
+    if (nameInput.textContent.trim() === "") {
+      nameInput.textContent = namePlaceholder;
+      nameInput.style.color = "gray";
+    }
+  });
+
+  typingFrame.addEventListener('focus', () => {
+    if (typingFrame.textContent.trim() === typingPlaceholder) {
+      typingFrame.textContent = "";
+      typingFrame.style.color = "black";
+    }
+  });
+
+  typingFrame.addEventListener('blur', () => {
+    if (typingFrame.textContent.trim() === "") {
+      typingFrame.textContent = typingPlaceholder;
+      typingFrame.style.color = "gray";
+    }
+  });
+
+  function registerUser() {
+    const userName = nameInput.textContent.trim();
+    if (userName && userName !== namePlaceholder) {
+      localStorage.setItem('userName', userName);
+      loginFrame.style.display = 'none';
+      commentSection.style.display = 'block';
+      loadComments();
+    }
+  }
+
+  function postIdea() {
+    const text = typingFrame.textContent.trim();
+    const userName = localStorage.getItem('userName');
+    if (text && text !== typingPlaceholder && userName) {
+      const comment = { userName, text };
+      database.ref('comments/' + roomName).push(comment);
+      typingFrame.textContent = typingPlaceholder;
+      typingFrame.style.color = "gray";
+    }
+  }
+
+  function loadComments() {
+    database.ref('comments/' + roomName).off();
+    database.ref('comments/' + roomName).on('child_added', function(snapshot) {
+      const comment = snapshot.val();
+      const key = snapshot.key;
+      const userName = localStorage.getItem('userName');
+
+      const commentElement = document.createElement('div');
+      commentElement.className = 'comment';
+
+      const commentName = document.createElement('div');
+      commentName.className = 'comment-name';
+      commentName.textContent = comment.userName;
+
+      const commentText = document.createElement('div');
+      commentText.className = 'comment-text';
+      commentText.textContent = comment.text;
+
+      const deleteBtn = document.createElement('div');
+      deleteBtn.className = 'delete-btn';
+      deleteBtn.textContent = '×';
+      if (comment.userName === userName) {
+        deleteBtn.style.display = 'block';
+        deleteBtn.onclick = function () {
+          database.ref('comments/' + roomName + '/' + key).remove().then(() => {
+            commentElement.remove();
+          });
+        };
       }
+
+      commentElement.appendChild(commentName);
+      commentElement.appendChild(commentText);
+      commentElement.appendChild(deleteBtn);
+      commentsFrame.appendChild(commentElement);
     });
+  }
 
-    function postComment() {
-      const text = document.getElementById("comment-input").value;
-      if (!text.trim()) return;
-      const comment = {
-        text: text,
-        userName: user.displayName,
-        uid: user.uid
-      };
-      database.ref(`comments/${room}`).push(comment);
-      document.getElementById("comment-input").value = "";
+  window.onload = () => {
+    const storedName = localStorage.getItem('userName');
+    if (storedName) {
+      loginFrame.style.display = 'none';
+      commentSection.style.display = 'block';
+      loadComments();
     }
-
-    function loadComments() {
-      const commentsDiv = document.getElementById("comments");
-      database.ref(`comments/${room}`).on("value", snapshot => {
-        commentsDiv.innerHTML = "";
-        snapshot.forEach(child => {
-          const key = child.key;
-          const comment = child.val();
-          const commentElement = document.createElement("div");
-          commentElement.className = "comment";
-          commentElement.textContent = `${comment.userName}: ${comment.text}`;
-
-          if (user && comment.uid === user.uid) {
-            const deleteBtn = document.createElement("div");
-            deleteBtn.className = "delete-btn";
-            deleteBtn.textContent = "×";
-            deleteBtn.onclick = () => {
-              database.ref(`comments/${room}/${key}`).remove();
-            };
-            commentElement.appendChild(deleteBtn);
-          }
-
-          commentsDiv.appendChild(commentElement);
-        });
-      });
-    }
-  </script>
+  };
+</script>
 </body>
 </html>
